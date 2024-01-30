@@ -1,0 +1,103 @@
+/* ------------------------------------------------------------------------- *
+*
+*    Copyright (C) 2024 Jake Kurtz
+*
+*    This program is free software: you can redistribute it and/or modify
+*    it under the terms of the GNU General Public License as published by
+*    the Free Software Foundation, either version 3 of the License, or
+*    (at your option) any later version.
+*
+*    This program is distributed in the hope that it will be useful,
+*    but WITHOUT ANY WARRANTY; without even the implied warranty of
+*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+*    GNU General Public License for more details.
+*
+*    You should have received a copy of the GNU General Public License
+*    along with this program. If not, see <https://www.gnu.org/licenses/>.
+*
+* ------------------------------------------------------------------------- */
+
+#include "spectral_oslpy.h"
+
+void kubelka_munk(vector l, float f, float n, float s, color col_a, color col_b, output vector R)
+{
+    float k1 = pow2((n - 1.0) / (n + 1.0));
+    float k2 = clamp(s, 0.0, 1.0 - k1);
+
+    vector Rm_a = sRGB_to_SPEC(col_a, l);
+    vector Rm_b = sRGB_to_SPEC(col_b, l);
+
+    float q = 1.0 - k1 - k2;
+    vector R_a = k1 + (max( Rm_a - k1, 0.0) / (q + k2*Rm_a));
+    vector R_b = k1 + (max( Rm_b - k1, 0.0) / (q + k2*Rm_b));
+
+    vector K_a = pow2(1.0 - R_a) / max((2.0*R_a), .05);
+    vector K_b = pow2(1.0 - R_b) / max((2.0*R_b), .05);
+    
+    vector K = mix(K_a, K_b, f);
+    
+    R = 1. + K - sqrt(K*K + 2.0*K);
+}
+
+shader Kubelka_Munk_Mix
+(
+/* -------------------------------------------------------------------------- */
+/*                                   Inputs                                   */
+/* -------------------------------------------------------------------------- */
+
+    float f = .5
+    [[ 
+        string help = "",
+        string label = "Factor",
+        float min = 0,
+        float max = 1
+    ]],
+
+    float n = 1.48
+    [[ 
+        string help = "",
+        string label = "IOR",
+        float min = 0,
+        float max = 1
+    ]],
+
+    float s = .2
+    [[ 
+        string help = "",
+        string label = "Internal Reflectance",
+        float min = 0,
+        float max = 1
+    ]],
+    
+    color color_a = .5
+    [[ 
+        string help = "",
+        string label = "A"
+    ]],
+
+    color color_b = .5
+    [[ 
+        string help = "",
+        string label = "B"
+    ]],
+
+/* -------------------------------------------------------------------------- */
+/*                                   Outputs                                  */
+/* -------------------------------------------------------------------------- */
+    
+    output color R = 0
+    [[
+		string help = ""
+	]]
+)
+{
+    vector l[ARRAY_SIZE];
+    gen_lambda_samples(P, l);
+
+    vector R_spec[ARRAY_SIZE];
+
+    kubelka_munk(l[0], f, n, s, color_a, color_b, R_spec[0]);
+    kubelka_munk(l[1], f, n, s, color_a, color_b, R_spec[1]);
+
+    R = SPEC_to_sRGB(R_spec, l);
+}
